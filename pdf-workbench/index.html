@@ -27,6 +27,14 @@ header{display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px
 header .brand{font-weight:700;letter-spacing:.02em}
 header .brand span{color:var(--accent)}
 header .brand small{color:var(--muted);font-weight:400;margin-left:8px}
+header .brand small a{color:var(--accent);text-decoration:none}
+header .home img{display:block;border-radius:50%;background:#fff;padding:2px;box-sizing:border-box}
+header .links{display:flex;gap:4px;margin-left:10px}
+header .links a{color:var(--text);text-decoration:none;font-size:12.5px;padding:5px 9px;border-radius:7px;border:1px solid var(--line);background:var(--panel2)}
+header .links a:hover{border-color:var(--accent)}
+header .links a#popout{border-color:var(--accent2);color:var(--accent2);font-weight:600}
+@media (max-width:1100px){header .brand small{display:none}header .links a{padding:5px 7px}}
+@media (max-width:760px){header .links a:not(#popout){display:none}header .doc{display:none}}
 header .spacer{flex:1}
 header .doc{color:var(--muted);font-size:12.5px;max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 main{display:grid;grid-template-columns:200px 1fr 320px;min-height:0}
@@ -83,7 +91,9 @@ footer .bar i{display:block;height:100%;width:0;background:var(--accent);transit
 <body>
 <div id="app">
 <header>
-  <div class="brand">PDF <span>Workbench</span><small>by x9m8 · runs entirely in your browser</small></div>
+  <a class="home" href="https://x9m8.com/" title="x9m8.com home"><img src="x9m8-logo-white.png" alt="x9m8" width="34" height="34"></a>
+  <div class="brand">PDF <span>Workbench</span><small>by <a href="https://x9m8.com/">x9m8.com</a> · runs entirely in your browser</small></div>
+  <nav class="links"><a href="https://x9m8.com/">x9m8.com</a><a href="https://x9m8.com/category/apps/">All apps</a><a href="https://x9m8.com/pdf-workbench-free-browser-pdf-editor-no-upload/">About this tool</a><a id="popout" href="https://apps.x9m8.com/pdf-workbench/" target="_blank" rel="noopener" class="hidden">Open in its own tab ↗</a></nav>
   <div class="spacer"></div>
   <div class="doc" id="docname">No file open</div>
   <button id="btnOpen">Open PDF</button>
@@ -95,14 +105,14 @@ footer .bar i{display:block;height:100%;width:0;background:var(--accent);transit
 <main>
   <nav id="nav"></nav>
   <div id="stage">
-    <div id="drop"><div class="big"><h2>Drop a PDF here</h2><p>or click Open PDF. Merge, split, reorder, rotate, watermark, number pages, annotate, sign, fill forms, OCR, extract text, compress, turn images into a PDF.</p><p class="hint">Files never leave this tab. There is no upload, no account, no server.</p><button class="primary" id="btnOpen2">Open PDF</button> <button id="btnImgStart">Start from images</button> <button id="btnSample">Try a sample scan</button></div></div>
+    <div id="drop"><div class="big"><h2>Drop a PDF here</h2><p>or click Open PDF. Merge, split, reorder, rotate, watermark, number pages, annotate, sign, fill forms, OCR, extract text, compress, turn images into a PDF.</p><p class="hint">Files never leave this tab. There is no upload, no account, no server. Bookmark <b>apps.x9m8.com/pdf-workbench</b> to come back any time.</p><button class="primary" id="btnOpen2">Open PDF</button> <button id="btnImgStart">Start from images</button> <button id="btnSample">Try a sample scan</button></div></div>
     <div id="thumbs" class="hidden"></div>
     <div id="viewer" class="hidden"><div id="vnav"><button id="vPrev">‹</button><span id="vLabel">Page 1 / 1</span><button id="vNext">›</button><button id="vOut" title="Zoom out">−</button><select id="vZoom"><option value="fit" selected>Fit width</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option><option value="3">300%</option></select><button id="vIn" title="Zoom in">+</button><button id="vThumbs" title="Back to thumbnails">⊞ Pages</button></div><div id="pagewrap"><canvas id="pcanvas"></canvas><canvas id="overlay"></canvas></div></div>
     <div id="panelfull" class="panelfull hidden"></div>
   </div>
   <aside id="side"></aside>
 </main>
-<footer><div id="status">Ready.</div><div class="bar"><i id="prog"></i></div><a href="https://x9m8.com/" style="color:var(--muted)">x9m8.com</a></footer>
+<footer><div id="status">Ready.</div><div class="bar"><i id="prog"></i></div><a href="https://x9m8.com/" style="color:var(--text);font-weight:600;text-decoration:none">x9m8.com</a><a href="https://x9m8.com/category/apps/" style="color:var(--muted);text-decoration:none">more apps</a><a href="https://github.com/x9m8/x9m8.github.io" style="color:var(--muted);text-decoration:none">source</a><span>Bookmark <b style="color:var(--text)">apps.x9m8.com/pdf-workbench</b></span></footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -549,6 +559,7 @@ window.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT' || e.
 window.addEventListener('beforeunload', e => { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
 /* ---------- boot ---------- */
+if (window.top !== window.self) { $('popout').classList.remove('hidden'); document.querySelectorAll('header a:not(#popout), footer a').forEach(a => a.target = '_top'); }
 setTool('pages');
 const q = new URLSearchParams(location.search); if (q.get('tool') && TOOLS.some(t => t[0] === q.get('tool'))) setTool(q.get('tool'));
 window.__wb = { S, loadBytes, extractText, compress, applyStamp, rebuild, listFields, imagesToPdf, PDFDocument };
