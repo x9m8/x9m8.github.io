@@ -95,7 +95,7 @@ footer .bar i{display:block;height:100%;width:0;background:var(--accent);transit
 <main>
   <nav id="nav"></nav>
   <div id="stage">
-    <div id="drop"><div class="big"><h2>Drop a PDF here</h2><p>or click Open PDF. Merge, split, reorder, rotate, watermark, number pages, annotate, sign, fill forms, OCR, extract text, compress, turn images into a PDF.</p><p class="hint">Files never leave this tab. There is no upload, no account, no server.</p><button class="primary" id="btnOpen2">Open PDF</button> <button id="btnImgStart">Start from images</button></div></div>
+    <div id="drop"><div class="big"><h2>Drop a PDF here</h2><p>or click Open PDF. Merge, split, reorder, rotate, watermark, number pages, annotate, sign, fill forms, OCR, extract text, compress, turn images into a PDF.</p><p class="hint">Files never leave this tab. There is no upload, no account, no server.</p><button class="primary" id="btnOpen2">Open PDF</button> <button id="btnImgStart">Start from images</button> <button id="btnSample">Try a sample scan</button></div></div>
     <div id="thumbs" class="hidden"></div>
     <div id="viewer" class="hidden"><div id="vnav"><button id="vPrev">‹</button><span id="vLabel">Page 1 / 1</span><button id="vNext">›</button><select id="vZoom"><option value="fit" selected>Fit</option><option value="0.8">80%</option><option value="1">100%</option><option value="1.3">130%</option><option value="1.6">160%</option></select></div><div id="pagewrap"><canvas id="pcanvas"></canvas><canvas id="overlay"></canvas></div></div>
     <div id="panelfull" class="panelfull hidden"></div>
@@ -210,6 +210,7 @@ $('btnOpen').onclick = $('btnOpen2').onclick = () => $('fileIn').click();
 $('btnAdd').onclick = () => $('fileIn').click();
 $('fileIn').onchange = e => { openFiles(e.target.files); e.target.value = ''; };
 $('btnImgStart').onclick = () => setTool('images');
+$('btnSample').onclick = async () => { status('Loading sample…'); const r = await fetch('sample-scan.pdf'); await loadBytes(new Uint8Array(await r.arrayBuffer()), 'sample-scan.pdf'); status('Sample loaded. Try Text & OCR.', 'ok'); };
 $('btnSave').onclick = () => download(S.bytes, baseName() + (S.dirty ? '-edited.pdf' : '.pdf'));
 const drop = $('drop'), stage = $('stage');
 for (const el of [stage]) {
