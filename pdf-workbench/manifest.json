@@ -1,0 +1,14 @@
+{
+  "name": "PDF Workbench by x9m8",
+  "short_name": "PDF Workbench",
+  "description": "Merge, split, rotate, watermark, sign, fill forms, OCR and compress PDFs. Runs entirely in your browser; nothing is uploaded.",
+  "start_url": "/pdf-workbench/",
+  "scope": "/pdf-workbench/",
+  "display": "standalone",
+  "background_color": "#0f1115",
+  "theme_color": "#171a21",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

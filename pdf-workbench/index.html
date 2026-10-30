@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PDF Workbench · x9m8</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#171a21">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="description" content="Free browser PDF toolkit: merge, split, reorder, rotate, watermark, page numbers, annotate, sign, fill forms, OCR, extract text, compress, images to PDF. Nothing is uploaded; every file stays on your computer.">
 <style>
 :root{--bg:#0f1115;--panel:#171a21;--panel2:#1e2330;--line:#2a3040;--text:#e8ebf2;--muted:#9aa3b5;--accent:#4f8cff;--accent2:#ffb347;--danger:#ff5d5d;--ok:#3ecf8e;--radius:10px}
@@ -56,6 +60,10 @@ footer .bar i{display:block;height:100%;width:0;background:var(--accent);transit
 .hidden{display:none!important}
 #drop .big{border:2px dashed var(--line);border-radius:16px;padding:40px 60px;max-width:560px}
 #drop.over .big{border-color:var(--accent)}
+.bookmark{font-size:1.15em;font-weight:700;padding:14px 28px;border-radius:12px;background:var(--accent2);border-color:var(--accent2);color:#1b1407}
+.bookmark:hover{filter:brightness(1.08)}
+#bmHint{min-height:1.2em;margin:4px 0 0}
+#btnBookmarkTop{border-color:var(--accent2);color:var(--accent2);font-weight:600}
 /* thumbnails */
 #thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;padding:16px}
 .thumb{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:8px;cursor:grab;user-select:none}
@@ -96,6 +104,7 @@ footer .bar i{display:block;height:100%;width:0;background:var(--accent);transit
   <nav class="links"><a href="https://x9m8.com/">x9m8.com</a><a href="https://x9m8.com/category/apps/">All apps</a><a href="https://x9m8.com/pdf-workbench-free-browser-pdf-editor-no-upload/">About this tool</a><a id="popout" href="https://apps.x9m8.com/pdf-workbench/" target="_blank" rel="noopener" class="hidden">Open in its own tab ↗</a></nav>
   <div class="spacer"></div>
   <div class="doc" id="docname">No file open</div>
+  <button id="btnBookmarkTop" title="Bookmark or install">☆ Bookmark</button>
   <button id="btnOpen">Open PDF</button>
   <button id="btnAdd" disabled>Add PDFs</button>
   <button id="btnSave" class="primary" disabled>Download</button>
@@ -105,7 +114,8 @@ footer .bar i{display:block;height:100%;width:0;background:var(--accent);transit
 <main>
   <nav id="nav"></nav>
   <div id="stage">
-    <div id="drop"><div class="big"><h2>Drop a PDF here</h2><p>or click Open PDF. Merge, split, reorder, rotate, watermark, number pages, annotate, sign, fill forms, OCR, extract text, compress, turn images into a PDF.</p><p class="hint">Files never leave this tab. There is no upload, no account, no server. Bookmark <b>apps.x9m8.com/pdf-workbench</b> to come back any time.</p><button class="primary" id="btnOpen2">Open PDF</button> <button id="btnImgStart">Start from images</button> <button id="btnSample">Try a sample scan</button></div></div>
+    <div id="drop"><div class="big"><h2>Drop a PDF here</h2><p>or click Open PDF. Merge, split, reorder, rotate, watermark, number pages, annotate, sign, fill forms, OCR, extract text, compress, turn images into a PDF.</p><p class="hint">Files never leave this tab. There is no upload, no account, no server. Bookmark <b>apps.x9m8.com/pdf-workbench</b> to come back any time.</p><button class="primary" id="btnOpen2">Open PDF</button> <button id="btnImgStart">Start from images</button> <button id="btnSample">Try a sample scan</button></div>
+<button id="btnBookmark" class="bookmark">☆ Bookmark this page</button><p class="hint" id="bmHint"></p></div>
     <div id="thumbs" class="hidden"></div>
     <div id="viewer" class="hidden"><div id="vnav"><button id="vPrev">‹</button><span id="vLabel">Page 1 / 1</span><button id="vNext">›</button><button id="vOut" title="Zoom out">−</button><select id="vZoom"><option value="fit" selected>Fit width</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option><option value="3">300%</option></select><button id="vIn" title="Zoom in">+</button><button id="vThumbs" title="Back to thumbnails">⊞ Pages</button></div><div id="pagewrap"><canvas id="pcanvas"></canvas><canvas id="overlay"></canvas></div></div>
     <div id="panelfull" class="panelfull hidden"></div>
@@ -557,6 +567,22 @@ function trimCanvas(c) { const ctx = c.getContext('2d'); const d = ctx.getImageD
 /* ---------- keyboard ---------- */
 window.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return; if (S.tool === 'pages' && S.bytes && (e.key === 'Delete' || e.key === 'Backspace') && S.sel.size) { e.preventDefault(); deletePages([...S.sel]); } if ((S.tool === 'markup' || S.tool === 'view') && S.bytes) { if (e.key === '+' || e.key === '=') stepZoom(1); if (e.key === '-') stepZoom(-1); if (e.key === 'ArrowLeft') $('vPrev').click(); if (e.key === 'ArrowRight') $('vNext').click(); } if ((e.ctrlKey || e.metaKey) && e.key === 's' && S.bytes) { e.preventDefault(); $('btnSave').click(); } });
 window.addEventListener('beforeunload', e => { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+/* ---------- bookmark / install / offline ---------- */
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; const b = $('btnBookmark'); if (b) b.textContent = '⭳ Install PDF Workbench (free, works offline)'; });
+window.addEventListener('appinstalled', () => { $('bmHint').textContent = 'Installed. It is now in your apps list and works offline.'; $('bmHint').className = 'hint ok'; });
+async function bookmark() {
+  const hint = $('bmHint'); const url = 'https://apps.x9m8.com/pdf-workbench/';
+  if (installPrompt) { installPrompt.prompt(); const r = await installPrompt.userChoice; installPrompt = null; if (r.outcome === 'accepted') return; }
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform + navigator.userAgent); const ios = /iPhone|iPad/.test(navigator.userAgent); const android = /Android/.test(navigator.userAgent);
+  let tip = ios ? 'On iPhone or iPad: tap the Share button, then "Add to Home Screen".' : android ? 'On Android: open the browser menu (⋮) and choose "Add to Home screen" or "Install app".' : `Press ${mac ? '⌘ D' : 'Ctrl + D'} to bookmark this page.`;
+  try { await navigator.clipboard.writeText(url); tip += ' The address is copied to your clipboard.'; } catch {}
+  if (hint) { hint.textContent = tip; hint.className = 'hint warn'; } status(tip, 'warn');
+  if (window.top !== window.self) window.open(url, '_blank');
+}
+$('btnBookmark').onclick = bookmark; $('btnBookmarkTop').onclick = bookmark;
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 /* ---------- boot ---------- */
 if (window.top !== window.self) { $('popout').classList.remove('hidden'); document.querySelectorAll('header a:not(#popout), footer a').forEach(a => a.target = '_top'); }
