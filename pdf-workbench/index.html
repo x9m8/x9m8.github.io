@@ -97,7 +97,7 @@ footer .bar i{display:block;height:100%;width:0;background:var(--accent);transit
   <div id="stage">
     <div id="drop"><div class="big"><h2>Drop a PDF here</h2><p>or click Open PDF. Merge, split, reorder, rotate, watermark, number pages, annotate, sign, fill forms, OCR, extract text, compress, turn images into a PDF.</p><p class="hint">Files never leave this tab. There is no upload, no account, no server.</p><button class="primary" id="btnOpen2">Open PDF</button> <button id="btnImgStart">Start from images</button> <button id="btnSample">Try a sample scan</button></div></div>
     <div id="thumbs" class="hidden"></div>
-    <div id="viewer" class="hidden"><div id="vnav"><button id="vPrev">‹</button><span id="vLabel">Page 1 / 1</span><button id="vNext">›</button><select id="vZoom"><option value="fit" selected>Fit</option><option value="0.8">80%</option><option value="1">100%</option><option value="1.3">130%</option><option value="1.6">160%</option></select></div><div id="pagewrap"><canvas id="pcanvas"></canvas><canvas id="overlay"></canvas></div></div>
+    <div id="viewer" class="hidden"><div id="vnav"><button id="vPrev">‹</button><span id="vLabel">Page 1 / 1</span><button id="vNext">›</button><button id="vOut" title="Zoom out">−</button><select id="vZoom"><option value="fit" selected>Fit width</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option><option value="3">300%</option></select><button id="vIn" title="Zoom in">+</button><button id="vThumbs" title="Back to thumbnails">⊞ Pages</button></div><div id="pagewrap"><canvas id="pcanvas"></canvas><canvas id="overlay"></canvas></div></div>
     <div id="panelfull" class="panelfull hidden"></div>
   </div>
   <aside id="side"></aside>
@@ -139,6 +139,7 @@ const baseName = () => S.name.replace(/\.pdf$/i, '');
 /* ---------- tools registry ---------- */
 const TOOLS = [
   ['pages', 'Pages', 'merge · split · reorder · rotate'],
+  ['view', 'View', 'read · zoom · page through'],
   ['stamp', 'Stamp', 'watermark · numbers · header/footer'],
   ['markup', 'Markup & Sign', 'text · highlight · draw · signature'],
   ['forms', 'Forms', 'fill · flatten'],
@@ -153,11 +154,11 @@ for (const [id, name, k] of TOOLS) { const b = document.createElement('button');
 function setTool(id) {
   S.tool = id;
   for (const b of nav.children) b.classList.toggle('active', b.dataset.tool === id);
-  $('thumbs').classList.toggle('hidden', !(S.bytes && id !== 'markup' && id !== 'images'));
-  $('viewer').classList.toggle('hidden', !(id === 'markup' && S.bytes));
+  $('thumbs').classList.toggle('hidden', !(S.bytes && id !== 'markup' && id !== 'view' && id !== 'images'));
+  $('viewer').classList.toggle('hidden', !((id === 'markup' || id === 'view') && S.bytes));
   $('panelfull').classList.toggle('hidden', id !== 'images');
   $('drop').classList.toggle('hidden', !!S.bytes || id === 'images');
-  if (id === 'markup' && S.bytes) renderView();
+  if ((id === 'markup' || id === 'view') && S.bytes) renderView();
   if (id === 'images') renderImagesPanel();
   renderSide();
 }
@@ -176,7 +177,7 @@ async function refresh() {
   S.pageCount = S.pdfjs.numPages;
   $('docname').textContent = `${S.name} · ${S.pageCount} page${S.pageCount===1?'':'s'} · ${fmtSize(S.bytes.length)}`;
   await renderThumbs();
-  if (S.tool === 'markup') renderView();
+  if (S.tool === 'markup' || S.tool === 'view') renderView();
 }
 async function commit(bytes, msg) { S.bytes = bytes; S.dirty = true; await refresh(); if (msg) status(msg, 'ok'); renderSide(); }
 
@@ -230,6 +231,8 @@ async function renderThumbs() {
     r.onclick = e => { e.stopPropagation(); rotatePages([i], 90); };
     x.onclick = e => { e.stopPropagation(); deletePages([i]); };
     d.onclick = e => { if (e.shiftKey && S.sel.size) { const a = Math.min(...S.sel), b = Math.max(...S.sel); const lo = Math.min(a, i), hi = Math.max(b, i); for (let k = lo; k <= hi; k++) S.sel.add(k); } else if (e.ctrlKey || e.metaKey) { S.sel.has(i) ? S.sel.delete(i) : S.sel.add(i); } else { S.sel.clear(); S.sel.add(i); } paintSel(); renderSide(); };
+    d.addEventListener('dblclick', () => { S.view.page = i; setTool('view'); });
+    d.title = 'Double-click to view full size';
     d.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', i); });
     d.addEventListener('dragover', e => { e.preventDefault(); d.classList.add('dragover'); });
     d.addEventListener('dragleave', () => d.classList.remove('dragover'));
@@ -298,13 +301,17 @@ async function renderView() {
   const vp = page.getViewport({ scale: z * 1.25 });
   S.view.vp = vp; S.view.scale = vp.scale; pc.width = ov.width = vp.width; pc.height = ov.height = vp.height; $('pagewrap').style.width = vp.width + 'px'; $('pagewrap').style.height = vp.height + 'px';
   await page.render({ canvasContext: pc.getContext('2d'), viewport: vp }).promise;
-  $('vLabel').textContent = `Page ${S.view.page + 1} / ${S.pageCount}`;
+  $('vLabel').textContent = `Page ${S.view.page + 1} / ${S.pageCount}`; ov.style.cursor = S.tool === 'view' ? 'default' : 'crosshair';
   drawOverlay();
 }
 $('vPrev').onclick = () => { if (S.view.page > 0) { S.view.page--; renderView(); } };
 $('vNext').onclick = () => { if (S.view.page < S.pageCount - 1) { S.view.page++; renderView(); } };
 $('vZoom').onchange = e => { S.view.zoom = e.target.value === 'fit' ? 'fit' : +e.target.value; renderView(); };
-window.addEventListener('resize', () => { if (S.tool === 'markup' && S.bytes && S.view.zoom === 'fit') renderView(); });
+const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+function stepZoom(dir) { const cur = S.view.zoom === 'fit' ? S.view.scale / 1.25 : S.view.zoom; let next = dir > 0 ? ZOOMS.find(z => z > cur + .01) : [...ZOOMS].reverse().find(z => z < cur - .01); if (!next) return; S.view.zoom = next; $('vZoom').value = String(next); renderView(); }
+$('vIn').onclick = () => stepZoom(1); $('vOut').onclick = () => stepZoom(-1); $('vThumbs').onclick = () => setTool('pages');
+$('stage').addEventListener('wheel', e => { if ((e.ctrlKey || e.metaKey) && (S.tool === 'markup' || S.tool === 'view') && S.bytes) { e.preventDefault(); stepZoom(e.deltaY < 0 ? 1 : -1); } }, { passive: false });
+window.addEventListener('resize', () => { if ((S.tool === 'markup' || S.tool === 'view') && S.bytes && S.view.zoom === 'fit') renderView(); });
 // annotations stored in canvas pixel coords for the current render; converted to PDF points on bake using S.view.vp
 // To keep it simple across zoom changes, we store in PDF user units (points, origin bottom-left) and convert when drawing.
 function toPdf(x, y) { const vp = S.view.vp; const [px, py] = vp.convertToPdfPoint(x, y); return [px, py]; }
@@ -326,6 +333,7 @@ function drawAnn(ctx, a, k, live) {
 }
 let dragging = false, start = null;
 ov.addEventListener('pointerdown', e => {
+  if (S.tool === 'view') return;
   const r = ov.getBoundingClientRect(); const x = e.clientX - r.left, y = e.clientY - r.top; const [px, py] = toPdf(x, y); const m = S.draw.mode;
   if (m === 'select') { // click on annotation to delete (last one hit)
     const arr = pageAnn(); for (let i = arr.length - 1; i >= 0; i--) { if (hit(arr[i], px, py)) { if (confirm('Remove this annotation?')) { arr.splice(i, 1); drawOverlay(); } return; } } return;
@@ -439,9 +447,12 @@ async function askGemini(promptText, docText) {
 function renderSide() {
   const el = $('side'); const has = !!S.bytes; const t = S.tool;
   const need = `<p class="help">Open a PDF first.</p>`;
-  if (t === 'pages') {
+  if (t === 'view') {
+    el.innerHTML = `<h3>View</h3><p class="help">Page through with ‹ › or the arrow keys. Zoom with + and −, the menu, or Ctrl + scroll. Double-clicking a thumbnail under Pages opens that page here.</p>` + (has ? `<div class="row"><button id="vGoMark">Annotate this page</button></div>` : need);
+    if (has) $('vGoMark').onclick = () => setTool('markup');
+  } else if (t === 'pages') {
     const sel = [...S.sel].sort((a, b) => a - b);
-    el.innerHTML = `<h3>Pages</h3><p class="help">Drag thumbnails to reorder. Click to select; Shift and Ctrl extend the selection.</p>` + (has ? `
+    el.innerHTML = `<h3>Pages</h3><p class="help">Drag thumbnails to reorder. Click to select; Shift and Ctrl extend the selection. Double-click a page to view it full size.</p>` + (has ? `
       <div class="row"><button id="pRotL" ${sel.length?'':'disabled'}>⟲ Rotate</button><button id="pRotR" ${sel.length?'':'disabled'}>Rotate ⟳</button><button id="pDel" class="danger" ${sel.length?'':'disabled'}>Delete</button></div>
       <p class="hint" style="margin:6px 0 0">${sel.length ? sel.length + ' selected: ' + sel.map(i=>i+1).join(', ') : S.pageCount + ' pages, none selected'}</p>
       <label>Extract pages (e.g. 1-3, 7)</label><div class="row"><input type="text" id="pRange" placeholder="1-3, 7"><button id="pExtract">Extract</button></div>
@@ -534,7 +545,7 @@ function renderSide() {
 function trimCanvas(c) { const ctx = c.getContext('2d'); const d = ctx.getImageData(0, 0, c.width, c.height).data; let x0 = c.width, y0 = c.height, x1 = 0, y1 = 0, any = false; for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) { if (d[(y * c.width + x) * 4 + 3] > 10) { any = true; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } } if (!any) return null; const o = document.createElement('canvas'); const pad = 6; o.width = x1 - x0 + pad * 2; o.height = y1 - y0 + pad * 2; o.getContext('2d').drawImage(c, x0 - pad, y0 - pad, o.width, o.height, 0, 0, o.width, o.height); return o.toDataURL('image/png'); }
 
 /* ---------- keyboard ---------- */
-window.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return; if (S.tool === 'pages' && S.bytes && (e.key === 'Delete' || e.key === 'Backspace') && S.sel.size) { e.preventDefault(); deletePages([...S.sel]); } if (S.tool === 'markup' && S.bytes) { if (e.key === 'ArrowLeft') $('vPrev').click(); if (e.key === 'ArrowRight') $('vNext').click(); } if ((e.ctrlKey || e.metaKey) && e.key === 's' && S.bytes) { e.preventDefault(); $('btnSave').click(); } });
+window.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return; if (S.tool === 'pages' && S.bytes && (e.key === 'Delete' || e.key === 'Backspace') && S.sel.size) { e.preventDefault(); deletePages([...S.sel]); } if ((S.tool === 'markup' || S.tool === 'view') && S.bytes) { if (e.key === '+' || e.key === '=') stepZoom(1); if (e.key === '-') stepZoom(-1); if (e.key === 'ArrowLeft') $('vPrev').click(); if (e.key === 'ArrowRight') $('vNext').click(); } if ((e.ctrlKey || e.metaKey) && e.key === 's' && S.bytes) { e.preventDefault(); $('btnSave').click(); } });
 window.addEventListener('beforeunload', e => { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
 /* ---------- boot ---------- */
