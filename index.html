@@ -13,7 +13,13 @@
   h1 { font-size: 22px; margin: 0 0 6px; }
   p.lead { color: var(--muted); margin: 0 0 32px; }
   a.card { display:block; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; color:inherit; text-decoration:none; margin-bottom:12px; }
-  a.card:hover { border-color: var(--accent); }
+  a.card:hover, div.card:hover { border-color: var(--accent); }
+  div.card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin-bottom:12px; }
+  div.card a.open { display:block; color:inherit; text-decoration:none; }
+  div.card b { display:block; margin-bottom:4px; }
+  div.card span { color: var(--muted); font-size: 14px; }
+  div.card a.read { display:inline-block; margin-top:8px; font-size:13px; color:var(--accent); text-decoration:none; }
+  div.card a.read:hover { text-decoration:underline; }
   a.card b { display:block; margin-bottom:4px; }
   a.card span { color: var(--muted); font-size: 14px; }
   footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
@@ -27,14 +33,14 @@
   <a class="card" href="/fluid/"><b>Fluid</b><span>Stable Fluids on the GPU: drag to stir, inject dye, view velocity, vorticity or pressure.</span></a>
   <a class="card" href="/reaction-diffusion/"><b>Reaction–Diffusion</b><span>Gray–Scott on the GPU: coral, mitosis, spots and stripes from two equations. Paint to seed.</span></a>
   <a class="card" href="/flocking/"><b>Flocking</b><span>Up to 4,000 boids following Reynolds' three rules, with a predator and obstacles.</span></a>
-  <a class="card" href="/pdf-workbench/"><b>PDF Workbench</b><span>Merge, split, rotate, watermark, annotate, sign, fill forms, OCR and compress PDFs. Runs entirely in the browser; nothing is uploaded. <a href="https://x9m8.com/pdf-workbench-free-browser-pdf-editor-no-upload/">Read the article</a></span></a>
+  <div class="card"><a class="open" href="/pdf-workbench/"><b>PDF Workbench</b><span>Merge, split, rotate, watermark, annotate, sign, fill forms, OCR and compress PDFs. Runs entirely in the browser; nothing is uploaded.</span></a><a class="read" href="https://x9m8.com/pdf-workbench-free-browser-pdf-editor-no-upload/">Read the article &rarr;</a></div>
   <a class="card" href="/erosion/"><b>Erosion</b><span>Fractal terrain carved by hundreds of thousands of simulated raindrops.</span></a>
-  <a class="card" href="/gravity-lab/"><b>Gravity Lab</b><span>N-body gravity: drag to launch, load the solar system, a binary star or the three-body figure-eight, and turn G up, down or negative.</span></a>
-  <a class="card" href="/double-pendulum/"><b>Double Pendulum Chaos</b><span>Two pendulums launched a hair apart, traced live, with a log-scale divergence graph.</span></a>
-  <a class="card" href="/cellular-automata/"><b>Cellular Automata Lab</b><span>Conway's Life, HighLife, Day &amp; Night, Seeds, Brian's Brain and all 256 elementary rules.</span></a>
-  <a class="card" href="/mandalbrot/"><b>Mandelbrot Explorer</b><span>Deep-zoom the Mandelbrot set with autopilot, colour palettes and named co-ordinates.</span></a>
-  <a class="card" href="/Shapes2/"><b>Kinetic Shapes</b><span>Eighteen bouncing-ball arenas in spinning polygons: gravity, restitution and rotation on sliders.</span></a>
-  <a class="card" href="/hole2/"><b>Hole City</b><span>Two-minute arcade game: steer a hole through a city and swallow everything smaller than you.</span></a>
+  <div class="card"><a class="open" href="/gravity-lab/"><b>Gravity Lab</b><span>N-body gravity: drag to launch, load the solar system, a binary star or the three-body figure-eight, and turn G up, down or negative.</span></a><a class="read" href="https://x9m8.com/gravity-lab-n-body-simulator-three-body-figure-eight/">Read the article &rarr;</a></div>
+  <div class="card"><a class="open" href="/double-pendulum/"><b>Double Pendulum Chaos</b><span>Two pendulums launched a hair apart, traced live, with a log-scale divergence graph.</span></a><a class="read" href="https://x9m8.com/double-pendulum-chaos-simulator-lyapunov/">Read the article &rarr;</a></div>
+  <div class="card"><a class="open" href="/cellular-automata/"><b>Cellular Automata Lab</b><span>Conway's Life, HighLife, Day &amp; Night, Seeds, Brian's Brain and all 256 elementary rules.</span></a><a class="read" href="https://x9m8.com/cellular-automata-game-of-life-rule-30-rule-110-simulator/">Read the article &rarr;</a></div>
+  <div class="card"><a class="open" href="/mandalbrot/"><b>Mandelbrot Explorer</b><span>Deep-zoom the Mandelbrot set with autopilot, colour palettes and named co-ordinates.</span></a><a class="read" href="https://x9m8.com/mandelbrot-set-explorer-zoom-fractal-browser/">Read the article &rarr;</a></div>
+  <div class="card"><a class="open" href="/Shapes2/"><b>Kinetic Shapes</b><span>Eighteen bouncing-ball arenas in spinning polygons: gravity, restitution and rotation on sliders.</span></a><a class="read" href="https://x9m8.com/kinetic-shapes-physics-sandbox-coefficient-of-restitution/">Read the article &rarr;</a></div>
+  <div class="card"><a class="open" href="/hole2/"><b>Hole City</b><span>Two-minute arcade game: steer a hole through a city and swallow everything smaller than you.</span></a><a class="read" href="https://x9m8.com/hole-city-browser-game-hole-io-donut-county/">Read the article &rarr;</a></div>
   <footer>Source on <a href="https://github.com/x9m8">github.com/x9m8</a> · <a href="https://x9m8.com">x9m8.com</a></footer>
 </main>
 </body>
