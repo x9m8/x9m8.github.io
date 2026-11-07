@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orbit Lab | x9m8</title>
+<style>
+:root{--bg:#060810;--panel:#111821;--ink:#e6edf3;--mute:#8b98a8;--acc:#ffb454}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#app{display:flex;flex-direction:column;height:100%}
+header{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border-bottom:1px solid #1f2a38;flex-wrap:wrap}
+header h1{font-size:15px;margin:0 8px 0 0;font-weight:600}
+.sp{flex:1}
+button,select{background:#1b2634;color:var(--ink);border:1px solid #2a384b;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+button:hover,select:hover{border-color:var(--acc)}
+button.on{background:var(--acc);color:#2a1a02;border-color:var(--acc)}
+main{flex:1;display:flex;min-height:0}
+#stage{flex:1;position:relative;min-width:0}
+canvas{position:absolute;inset:0;width:100%;height:100%}
+#read{width:240px;background:var(--panel);border-left:1px solid #1f2a38;padding:10px 12px;overflow:auto;font-size:13px}
+#read h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin:10px 0 4px}
+#read table{width:100%;border-collapse:collapse}
+#read td{padding:2px 0}
+#read td:last-child{text-align:right;color:#fff}
+#read p{color:var(--mute);margin:6px 0;font-size:12px}
+#ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px 14px;padding:8px 12px;background:var(--panel);border-top:1px solid #1f2a38;align-items:end}
+#ctl label{display:flex;flex-direction:column;font-size:12px;color:var(--mute)}
+#ctl label b{color:var(--ink);font-weight:500}
+input[type=range]{width:100%;accent-color:var(--acc)}
+@media(max-width:700px){#read{width:150px;font-size:12px}}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+<h1>Orbit Lab</h1>
+<button id="mK" class="on">Kepler's laws</button>
+<button id="mS">Solar system</button>
+<button id="mH">Hohmann transfer</button>
+<span class="sp"></span>
+<button id="bPause">Pause</button>
+<button id="bFS">Full screen</button>
+</header>
+<main>
+<div id="stage"><canvas id="c"></canvas></div>
+<aside id="read"></aside>
+</main>
+<div id="ctl"></div>
+</div>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const AU=149.597871; // 10^6 km
+const GM=1.32712440018e20; // m^3/s^2, Sun
+const AUm=1.495978707e11, DAY=86400, YR=365.25*DAY;
+// Planet data: distance from Sun in 10^6 km (NASA Planetary Fact Sheet), eccentricity, orbital period (days)
+const PL=[
+ ['Mercury',57.9,0.206,88.0,'#b5b5b5'],['Venus',108.2,0.007,224.7,'#e8c27a'],['Earth',149.6,0.017,365.2,'#4c9eff'],['Mars',228.0,0.094,687.0,'#e0674a'],
+ ['Jupiter',778.5,0.049,4331,'#d9a877'],['Saturn',1432,0.052,10747,'#e6d39a'],['Uranus',2867,0.047,30589,'#8fe0e8'],['Neptune',4515,0.010,59800,'#5d7bff']
+].map(p=>({n:p[0],a:p[1]/AU,e:p[2],T:p[3]/365.25,c:p[4]}));
+let mode='K',paused=false,t=0,last=performance.now();
+const S={a:1.5,e:.6,wedges:true,speed:1,logScale:false,tsp:30,from:2,to:3,hs:1};
+function kepler(M,e){M=((M%(2*Math.PI))+2*Math.PI)%(2*Math.PI);let E=e<.8?M:Math.PI;for(let i=0;i<30;i++){E-= (E-e*Math.sin(E)-M)/(1-e*Math.cos(E))}return E}
+function pos(a,e,Tyr,time,phase=0){const E=kepler(2*Math.PI*time/Tyr+phase,e);return [a*(Math.cos(E)-e),a*Math.sqrt(1-e*e)*Math.sin(E)]}
+const cv=$('c'),cx=cv.getContext('2d');
+function fit(){const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;const w=Math.round(r.width*d),h=Math.round(r.height*d);if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h}return d}
+function sun(x,y,d){const g=cx.createRadialGradient(x,y,0,x,y,16*d);g.addColorStop(0,'#fff6c8');g.addColorStop(.4,'#ffcf5a');g.addColorStop(1,'rgba(255,170,40,0)');cx.fillStyle=g;cx.beginPath();cx.arc(x,y,16*d,0,6.3);cx.fill()}
+function ell(a,e,sc,cxp,cyp,col,lw){cx.strokeStyle=col;cx.lineWidth=lw;cx.beginPath();for(let i=0;i<=200;i++){const E=i/200*2*Math.PI;const x=a*(Math.cos(E)-e),y=a*Math.sqrt(1-e*e)*Math.sin(E);const px=cxp+x*sc,py=cyp-y*sc;i?cx.lineTo(px,py):cx.moveTo(px,py)}cx.stroke()}
+const rd=$('read');
+function table(rows){return '<table>'+rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')+'</table>'}
+// ---------- Kepler mode
+function drawK(d){
+  const W=cv.width,H=cv.height,{a,e}=S;const Tyr=Math.pow(a,1.5);
+  const sc=Math.min(W,H)*.62/(a*(1+e));const x0=W/2+ (a*e)*sc*0.0,y0=H/2;
+  const cxp=W/2+a*e*sc*0.5, cyp=y0; // shift so ellipse is roughly centred
+  ell(a,e,sc,cxp,cyp,'#3a4a60',1.5*d);
+  const N=12;
+  if(S.wedges){
+    for(let i=0;i<N;i++){ // wedges from the last full period: equal time slices
+      const tt=t%Tyr; const base=Math.floor(tt/(Tyr/N));
+      const t0=(base-i)*Tyr/N, t1=(base-i+1)*Tyr/N; if(i>5)break;
+      cx.fillStyle=`hsla(${35+(i%2)*20},90%,55%,${0.32-i*0.04})`;
+      cx.beginPath();cx.moveTo(cxp*1+ (0)*sc,cyp);
+      cx.moveTo(cxp,cyp);
+      const M0=2*Math.PI*t0/Tyr,M1=2*Math.PI*Math.min(t1,tt)/Tyr;
+      cx.moveTo(cxp,cyp);
+      const steps=24;for(let k=0;k<=steps;k++){const M=M0+(M1-M0)*k/steps;const E=kepler(M,e);const px=cxp+a*(Math.cos(E)-e)*sc,py=cyp-a*Math.sqrt(1-e*e)*Math.sin(E)*sc;cx.lineTo(px,py)}
+      cx.closePath();cx.fill();
+    }
+  }
+  sun(cxp,cyp,d);
+  const [x,y]=pos(a,e,Tyr,t);
+  cx.fillStyle='#4c9eff';cx.beginPath();cx.arc(cxp+x*sc,cyp-y*sc,6*d,0,6.3);cx.fill();
+  const r=Math.hypot(x,y);const v=Math.sqrt(GM*(2/(r*AUm)-1/(a*AUm)))/1000;
+  const vp=Math.sqrt(GM*(2/(a*(1-e)*AUm)-1/(a*AUm)))/1000, va=Math.sqrt(GM*(2/(a*(1+e)*AUm)-1/(a*AUm)))/1000;
+  rd.innerHTML='<h2>Orbit</h2>'+table([['Semi-major axis',a.toFixed(2)+' AU'],['Eccentricity',e.toFixed(2)],['Period',Tyr.toFixed(2)+' yr'],['Perihelion',(a*(1-e)).toFixed(2)+' AU'],['Aphelion',(a*(1+e)).toFixed(2)+' AU']])+
+   '<h2>Now</h2>'+table([['Distance',r.toFixed(2)+' AU'],['Speed',v.toFixed(1)+' km/s']])+
+   '<h2>Extremes</h2>'+table([['Speed at perihelion',vp.toFixed(1)+' km/s'],['Speed at aphelion',va.toFixed(1)+' km/s']])+
+   '<p>Kepler\'s second law: the shaded slices cover equal time, so they have equal area. The planet sweeps a short, fat slice near the Sun and a long, thin one far away, which is why it moves faster at perihelion.</p><p>Third law: period in years = (semi-major axis in AU)<sup>1.5</sup>, for a small body orbiting the Sun.</p>';
+}
+// ---------- Solar system mode
+function drawS(d){
+  const W=cv.width,H=cv.height;const maxA=PL[7].a*(1+PL[7].e);
+  const f=a=>S.logScale?Math.log(1+a*4)/Math.log(1+maxA*4):a/maxA;
+  const R=Math.min(W,H)*.46;
+  const cxp=W/2,cyp=H/2;
+  sun(cxp,cyp,d);
+  const sel=S.sel!=null?S.sel:2;
+  rd.innerHTML='<h2>Planets</h2>';
+  for(let i=0;i<PL.length;i++){const p=PL[i];
+    // orbit drawn as ellipse via sampled points with radial remap for log scale
+    cx.strokeStyle=i===sel?'#667a96':'#2a384b';cx.lineWidth=1.2*d;cx.beginPath();
+    for(let k=0;k<=240;k++){const E=k/240*2*Math.PI;const x=p.a*(Math.cos(E)-p.e),y=p.a*Math.sqrt(1-p.e*p.e)*Math.sin(E);const rr=Math.hypot(x,y),s=f(rr)/rr*R;const px=cxp+x*s,py=cyp-y*s;k?cx.lineTo(px,py):cx.moveTo(px,py)}cx.stroke();
+    const [x,y]=pos(p.a,p.e,p.T,t,0);const rr=Math.hypot(x,y),s=f(rr)/rr*R;
+    cx.fillStyle=p.c;cx.beginPath();cx.arc(cxp+x*s,cyp-y*s,(i===sel?7:4.5)*d,0,6.3);cx.fill();
+    cx.fillStyle='#9fb0c4';cx.font=`${11*d}px system-ui`;cx.fillText(p.n,cxp+x*s+8*d,cyp-y*s-6*d);
+  }
+  const p=PL[sel];const [x,y]=pos(p.a,p.e,p.T,t,0);const r=Math.hypot(x,y);const v=Math.sqrt(GM*(2/(r*AUm)-1/(p.a*AUm)))/1000;
+  rd.innerHTML='<h2>'+p.n+'</h2>'+table([['Semi-major axis',p.a.toFixed(3)+' AU'],['Eccentricity',p.e.toFixed(3)],['Period',p.T.toFixed(2)+' yr'],['Distance now',r.toFixed(3)+' AU'],['Speed now',v.toFixed(1)+' km/s'],['Kepler check T&sup2;/a&sup3;',(p.T*p.T/Math.pow(p.a,3)).toFixed(3)]])+
+   '<p>Click a planet name in the list below to select it.</p><div id="plist"></div><p>All planets start at the same angle at time zero, and orbits are drawn in the orbital plane only. Real orbits are slightly tilted and the Sun wobbles a little around the system centre; neither is modelled. Eccentricities are the real values, which is why most orbits look almost circular.</p>';
+  const pl=$('plist');PL.forEach((q,i)=>{const b=document.createElement('button');b.textContent=q.n;b.style.cssText='margin:2px;padding:3px 7px;font-size:12px';if(i===sel)b.className='on';b.onclick=()=>{S.sel=i};pl.appendChild(b)});
+}
+// ---------- Hohmann mode
+function drawH(d){
+  const A=PL[S.from],B=PL[S.to];const r1=A.a,r2=B.a;
+  const W=cv.width,H=cv.height;const maxR=Math.max(r1,r2)*1.08;const sc=Math.min(W,H)*.45/maxR;const cxp=W/2,cyp=H/2;
+  const at=(r1+r2)/2,Tt=0.5*Math.pow(at,1.5);               // transfer time, years
+  const nB=2*Math.PI/Math.pow(r2,1.5);                       // rad/yr of destination
+  const lead=Math.PI-nB*Tt;                                   // required lead angle (rad)
+  const cycle=Tt+0.35*Math.max(Tt,.3);                       // hold at end
+  const tt=(t%cycle);const ft=Math.min(tt,Tt);
+  // orbits
+  cx.strokeStyle='#2a384b';cx.lineWidth=1.3*d;
+  for(const r of [r1,r2]){cx.beginPath();cx.arc(cxp,cyp,r*sc,0,6.3);cx.stroke()}
+  // transfer ellipse (apsides at angle 0 and PI, perihelion at r1 when r1<r2)
+  const e=Math.abs(r2-r1)/(r1+r2);const inward=r2<r1;
+  const tp=E=>inward?[-at*(Math.cos(E)-e),-at*Math.sqrt(1-e*e)*Math.sin(E)]:[at*(Math.cos(E)-e),at*Math.sqrt(1-e*e)*Math.sin(E)];
+  cx.strokeStyle='#ffb45499';cx.setLineDash([6*d,5*d]);cx.beginPath();
+  for(let k=0;k<=200;k++){const q=tp(k/200*2*Math.PI);const px=cxp+q[0]*sc,py=cyp-q[1]*sc;k?cx.lineTo(px,py):cx.moveTo(px,py)}cx.stroke();cx.setLineDash([]);
+  sun(cxp,cyp,d);
+  // origin planet at angle 0 at time 0, moves at nA ; destination starts at 'lead' ahead
+  const nA=2*Math.PI/Math.pow(r1,1.5);const th1=nA*ft, th2=lead+nB*ft;
+  const dot=(r,th,c,rad)=>{cx.fillStyle=c;cx.beginPath();cx.arc(cxp+r*Math.cos(th)*sc,cyp-r*Math.sin(th)*sc,rad*d,0,6.3);cx.fill()};
+  dot(r1,th1,A.c,6);dot(r2,th2,B.c,6);
+  // spacecraft along transfer: true anomaly from mean anomaly (departure at perihelion if outward, aphelion if inward)
+  const M=2*Math.PI*ft/(2*Tt)+(inward?Math.PI:0);const E=kepler(M,e);
+  const q=tp(E);cx.fillStyle='#fff';cx.beginPath();cx.arc(cxp+q[0]*sc,cyp-q[1]*sc,3.5*d,0,6.3);cx.fill();
+  cx.fillStyle='#9fb0c4';cx.font=`${11*d}px system-ui`;cx.fillText(A.n,cxp+r1*sc*Math.cos(th1)+8*d,cyp-r1*sc*Math.sin(th1));cx.fillText(B.n,cxp+r2*sc*Math.cos(th2)+8*d,cyp-r2*sc*Math.sin(th2));
+  // delta-v (heliocentric, circular coplanar orbits)
+  const mu=GM/Math.pow(AUm,3)*YR*YR; // AU^3/yr^2
+  const v1=Math.sqrt(mu/r1),v2=Math.sqrt(mu/r2);const vt1=Math.sqrt(mu*(2/r1-1/at)),vt2=Math.sqrt(mu*(2/r2-1/at));
+  const kms=1/ (YR/AUm/1000); // AU/yr -> km/s
+  const dv1=Math.abs(vt1-v1)*AUm/YR/1000, dv2=Math.abs(v2-vt2)*AUm/YR/1000;
+  const wait=A===B?0:0;
+  rd.innerHTML='<h2>Transfer</h2>'+table([['From',A.n],['To',B.n],['Transfer time',(Tt*365.25).toFixed(0)+' days'],['Departure phase',(((lead*180/Math.PI)%360+360)%360).toFixed(1)+'&deg; ahead'],['Burn 1',dv1.toFixed(2)+' km/s'],['Burn 2',dv2.toFixed(2)+' km/s'],['Total',(dv1+dv2).toFixed(2)+' km/s']])+
+   '<p>A Hohmann transfer is the cheapest two-burn route between two circular, coplanar orbits: an ellipse that touches both. The target must be at the listed angle ahead of the departure planet when the craft leaves, so that it arrives at the same spot.</p><p>The burns are heliocentric speed changes only. They leave out escaping the departure planet\'s gravity, capture at the destination, and orbital inclination, so they are not a mission budget.</p>';
+}
+function draw(d){
+  cx.fillStyle='#060810';cx.fillRect(0,0,cv.width,cv.height);
+  if(mode==='K')drawK(d);else if(mode==='S')drawS(d);else drawH(d);
+}
+function buildCtl(){
+  const c=$('ctl');c.innerHTML='';
+  const rng=(lab,id,min,max,step,val,fmt,cb)=>{const l=document.createElement('label');l.innerHTML=`${lab} <b id="v${id}">${fmt(val)}</b>`;const r=document.createElement('input');r.type='range';r.min=min;r.max=max;r.step=step;r.value=val;r.oninput=()=>{cb(+r.value);$('v'+id).textContent=fmt(+r.value)};l.appendChild(r);c.appendChild(l)};
+  const sel=(lab,id,val,cb)=>{const l=document.createElement('label');l.textContent=lab;const s=document.createElement('select');PL.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent=p.n;s.appendChild(o)});s.value=val;s.onchange=()=>{cb(+s.value);t=0};l.appendChild(s);c.appendChild(l)};
+  if(mode==='K'){rng('Semi-major axis','a',.4,5,.05,S.a,v=>v.toFixed(2)+' AU',v=>{S.a=v;t=0});rng('Eccentricity','e',0,.95,.01,S.e,v=>v.toFixed(2),v=>{S.e=v;t=0});rng('Speed','sp',.2,4,.1,S.speed,v=>v.toFixed(1)+'x',v=>S.speed=v);
+    const b=document.createElement('button');b.textContent='Equal-area slices';b.className=S.wedges?'on':'';b.onclick=()=>{S.wedges=!S.wedges;b.classList.toggle('on',S.wedges)};c.appendChild(b)}
+  else if(mode==='S'){rng('Time scale','ts',1,365,1,S.tsp,v=>v+' days/s',v=>S.tsp=v);
+    const b=document.createElement('button');b.textContent='Log distance scale';b.className=S.logScale?'on':'';b.onclick=()=>{S.logScale=!S.logScale;b.classList.toggle('on',S.logScale)};c.appendChild(b)}
+  else{sel('From','f',S.from,v=>S.from=v);sel('To','t',S.to,v=>S.to=v);rng('Speed','hs',.2,3,.1,S.hs,v=>v.toFixed(1)+'x',v=>S.hs=v)}
+}
+function setMode(m){mode=m;t=0;for(const [k,id] of [['K','mK'],['S','mS'],['H','mH']])$(id).classList.toggle('on',k===m);buildCtl()}
+$('mK').onclick=()=>setMode('K');$('mS').onclick=()=>setMode('S');$('mH').onclick=()=>setMode('H');
+$('bPause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Play':'Pause'};
+$('bFS').onclick=()=>{const el=document.documentElement;if(document.fullscreenElement||document.webkitFullscreenElement){(document.exitFullscreen||document.webkitExitFullscreen).call(document)}else{(el.requestFullscreen||el.webkitRequestFullscreen).call(el)}};
+function frame(now){const dt=(now-last)/1000;last=now;
+  if(!paused){ if(mode==='K')t+=dt*S.speed*Math.pow(S.a,1.5)/8; else if(mode==='S')t+=dt*S.tsp/365.25; else t+=dt*S.hs*.25 }
+  const d=fit();draw(d);requestAnimationFrame(frame)}
+buildCtl();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
