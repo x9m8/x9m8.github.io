@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Double-Slit Wave Tank | x9m8</title>
+<style>
+:root{--bg:#0b0f14;--panel:#121923;--ink:#e6edf3;--mute:#8b98a8;--acc:#4cc2ff;--acc2:#ffb454}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+#app{display:flex;flex-direction:column;height:100%;min-height:0}
+header{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border-bottom:1px solid #1f2a38;flex-wrap:wrap}
+header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.02em}
+header .sp{flex:1}
+button{background:#1b2634;color:var(--ink);border:1px solid #2a384b;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.on{background:var(--acc);color:#04202e;border-color:var(--acc)}
+main{flex:1;display:flex;min-height:0}
+#stage{flex:1;position:relative;min-width:0;min-height:0}
+canvas{display:block}
+#wave{position:absolute;left:0;top:0;width:100%;height:100%}
+#side{width:210px;background:var(--panel);border-left:1px solid #1f2a38;display:flex;flex-direction:column;min-height:0}
+#side h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin:8px 10px 2px}
+#prof,#hits{width:100%;height:50%}
+#ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px 14px;padding:8px 12px;background:var(--panel);border-top:1px solid #1f2a38}
+#ctl label{display:flex;flex-direction:column;font-size:12px;color:var(--mute)}
+#ctl label b{color:var(--ink);font-weight:500}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#note{position:absolute;left:10px;bottom:8px;font-size:12px;color:#cfe;background:#0008;padding:3px 8px;border-radius:4px;pointer-events:none}
+@media(max-width:640px){#side{width:120px}}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+<h1>Double-Slit Wave Tank</h1>
+<div class="row">
+<button id="bWave" class="on">Waves</button>
+<button id="bPart">Particles</button>
+<button id="bS1" class="on">Slit 1 open</button>
+<button id="bS2" class="on">Slit 2 open</button>
+</div>
+<span class="sp"></span>
+<button id="bPause">Pause</button>
+<button id="bReset">Reset</button>
+<button id="bFS">Full screen</button>
+</header>
+<main>
+<div id="stage"><canvas id="wave"></canvas><div id="note"></div></div>
+<aside id="side">
+<h2>Screen intensity</h2><canvas id="prof"></canvas>
+<h2 id="hTitle">Time-averaged</h2><canvas id="hits"></canvas>
+</aside>
+</main>
+<div id="ctl">
+<label>Wavelength <b id="vL"></b><input id="rL" type="range" min="8" max="30" step="1" value="16"></label>
+<label>Slit separation <b id="vD"></b><input id="rD" type="range" min="20" max="120" step="1" value="60"></label>
+<label>Slit width <b id="vA"></b><input id="rA" type="range" min="3" max="24" step="1" value="8"></label>
+<label>Particle rate <b id="vR"></b><input id="rR" type="range" min="1" max="60" step="1" value="8"></label>
+</div>
+</div>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const W=360,H=280;               // simulation grid
+const BX=110;                     // barrier column
+const SX=W-50;                   // screen column
+let u0=new Float32Array(W*H),u1=new Float32Array(W*H),u2=new Float32Array(W*H);
+let wall=new Uint8Array(W*H);
+let damp=new Float32Array(W*H);
+let acc=new Float32Array(H);     // time-averaged intensity at screen column
+let accN=0,t=0,paused=false,mode='wave';
+let slit1=true,slit2=true;
+const P={L:16,D:60,A:8,R:8};
+const c2=0.25;                   // (c dt/dx)^2 , stable < 0.5 in 2D
+
+function build(){
+  wall.fill(0);
+  const mid=H>>1;
+  for(let y=0;y<H;y++){
+    let open=false;
+    const y1=mid-P.D/2,y2=mid+P.D/2;
+    if(slit1&&Math.abs(y-y1)<=P.A/2)open=true;
+    if(slit2&&Math.abs(y-y2)<=P.A/2)open=true;
+    if(!open)for(let x=BX-2;x<=BX+2;x++)wall[y*W+x]=1;
+  }
+  // sponge boundary
+  const S=44;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const d=Math.min(x,W-1-x,y,H-1-y);
+    damp[y*W+x]=d>=S?1:1-0.22*Math.pow((S-d)/S,2);
+  }
+}
+function reset(){u0.fill(0);u1.fill(0);u2.fill(0);acc.fill(0);accN=0;t=0;hitsClear()}
+function step(){
+  const w=2*Math.PI*c2**0.5/P.L;  // omega per step : k=2pi/L, c=sqrt(c2)
+  for(let y=1;y<H-1;y++){
+    const r=y*W;
+    for(let x=1;x<W-1;x++){
+      const i=r+x;
+      if(wall[i]){u2[i]=0;continue}
+      const lap=u1[i-1]+u1[i+1]+u1[i-W]+u1[i+W]-4*u1[i];
+      u2[i]=(2*u1[i]-u0[i]+c2*lap)*damp[i];
+    }
+  }
+  // plane-wave source (soft, ramped) along column 30
+  const ramp=Math.min(1,t/120);
+  for(let y=1;y<H-1;y++){const tp=Math.min(1,Math.min(y,H-1-y)/50);const i=y*W+60;u2[i]+=Math.sin(w*t)*0.07*ramp*tp}
+  const tmp=u0;u0=u1;u1=u2;u2=tmp;t++;
+  if(t>700){for(let y=0;y<H;y++){const v=u1[y*W+SX];acc[y]=acc[y]*0.996+v*v}accN++}
+}
+const cv=$('wave'),cx=cv.getContext('2d');
+const off=document.createElement('canvas');off.width=W;off.height=H;
+const ox=off.getContext('2d');const img=ox.createImageData(W,H);
+function draw(){
+  const d=img.data;
+  for(let i=0;i<W*H;i++){
+    const v=u1[i]*2.2,p=i*4;
+    if(wall[i]){d[p]=200;d[p+1]=170;d[p+2]=110;d[p+3]=255;continue}
+    const a=Math.max(-1,Math.min(1,v));
+    if(a>=0){d[p]=12+a*70;d[p+1]=18+a*190;d[p+2]=28+a*227}
+    else{d[p]=12-a*-240;d[p+1]=18+(-a)*120;d[p+2]=28+(-a)*30}
+    d[p+3]=255;
+  }
+  ox.putImageData(img,0,0);
+  const r=cv.getBoundingClientRect(),dpr=devicePixelRatio||1;
+  if(cv.width!==Math.round(r.width*dpr)){cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr)}
+  cx.imageSmoothingEnabled=true;
+  cx.drawImage(off,0,0,cv.width,cv.height);
+  // screen line
+  const sx=SX/W*cv.width;
+  cx.strokeStyle='#ffb45488';cx.setLineDash([6,6]);cx.beginPath();cx.moveTo(sx,0);cx.lineTo(sx,cv.height);cx.stroke();cx.setLineDash([]);
+}
+// profile + hits
+const pc=$('prof'),pctx=pc.getContext('2d'),hc=$('hits'),hctx=hc.getContext('2d');
+let hits=[],hitBins=new Float32Array(H),nHits=0;
+function hitsClear(){hits=[];hitBins.fill(0);nHits=0}
+function sizeSide(){for(const c of [pc,hc]){const r=c.getBoundingClientRect(),dpr=devicePixelRatio||1;const w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);if(c.width!==w||c.height!==h){c.width=w;c.height=h}}}
+function smoothed(){const o=new Float32Array(H);for(let y=0;y<H;y++){let s=0,n=0;for(let k=-2;k<=2;k++){const yy=y+k;if(yy>=0&&yy<H){s+=acc[yy];n++}}o[y]=s/n}return o}
+function drawProf(){
+  const w=pc.width,h=pc.height;pctx.fillStyle='#0b0f14';pctx.fillRect(0,0,w,h);
+  if(!accN)return;
+  const s=smoothed();let m=0;for(let y=0;y<H;y++)m=Math.max(m,s[y]);if(m<=0)return;
+  pctx.strokeStyle='#4cc2ff';pctx.lineWidth=2;pctx.beginPath();
+  for(let y=0;y<H;y++){const px=s[y]/m*(w-8)+2,py=y/H*h;y?pctx.lineTo(px,py):pctx.moveTo(px,py)}
+  pctx.stroke();
+}
+function sample(){
+  const s=smoothed();let tot=0;for(let y=30;y<H-30;y++)tot+=s[y];if(tot<=0)return -1;
+  let r=Math.random()*tot;for(let y=30;y<H-30;y++){r-=s[y];if(r<=0)return y}return H>>1;
+}
+function emit(n){
+  if(accN<600)return;
+  for(let k=0;k<n;k++){const y=sample();if(y<0)return;hits.push([Math.random()*0.9+0.05,y/H+ (Math.random()-.5)/H]);hitBins[y]++;nHits++}
+  if(hits.length>40000)hits.splice(0,2000);
+}
+function drawHits(){
+  const w=hc.width,h=hc.height;hctx.fillStyle='#0b0f14';hctx.fillRect(0,0,w,h);
+  if(mode!=='part')return;
+  // detector screen dots
+  hctx.fillStyle='rgba(255,200,110,.85)';
+  const half=w*0.5;
+  for(const [rx,ry] of hits){hctx.fillRect(rx*half*0.9,ry*h,2,2)}
+  // histogram on right half
+  let m=0;for(let y=0;y<H;y++)m=Math.max(m,hitBins[y]);
+  if(m>0){hctx.strokeStyle='#4cc2ff';hctx.beginPath();for(let y=0;y<H;y++){let s=0,n=0;for(let k=-3;k<=3;k++){const yy=y+k;if(yy>=0&&yy<H){s+=hitBins[yy];n++}}const px=half+ (s/n/m)*(w-half-4),py=y/H*h;y?hctx.lineTo(px,py):hctx.moveTo(px,py)}hctx.stroke()}
+}
+let last=performance.now(),carry=0;
+function frame(now){
+  if(!paused){for(let i=0;i<6;i++)step();
+    if(mode==='part'){carry+=P.R*(now-last)/1000*4;const n=Math.floor(carry);carry-=n;emit(n)}}
+  last=now;draw();sizeSide();drawProf();drawHits();
+  $('note').textContent=mode==='wave'?'Plane wave from the left, barrier with two slits, detector screen at the dashed line':'Each dot is one particle landing; the pattern builds from the wave intensity. Hits: '+nHits;
+  requestAnimationFrame(frame);
+}
+function sync(){
+  $('vL').textContent=P.L+' px';$('vD').textContent=P.D+' px';$('vA').textContent=P.A+' px';$('vR').textContent=P.R+' / s';
+  $('hTitle').textContent=mode==='part'?'Particle hits and histogram':'';
+}
+function setP(k,id){$(id).addEventListener('input',e=>{P[k]=+e.target.value;build();reset();sync()})}
+setP('L','rL');setP('D','rD');setP('A','rA');setP('R','rR');
+$('rR').addEventListener('input',()=>{build();reset()}); // harmless; rate needs no rebuild
+$('rR').oninput=e=>{P.R=+e.target.value;sync()};
+$('bWave').onclick=()=>{mode='wave';$('bWave').classList.add('on');$('bPart').classList.remove('on');sync()};
+$('bPart').onclick=()=>{mode='part';$('bPart').classList.add('on');$('bWave').classList.remove('on');sync()};
+$('bS1').onclick=e=>{slit1=!slit1;e.target.classList.toggle('on',slit1);e.target.textContent='Slit 1 '+(slit1?'open':'closed');build();reset()};
+$('bS2').onclick=e=>{slit2=!slit2;e.target.classList.toggle('on',slit2);e.target.textContent='Slit 2 '+(slit2?'open':'closed');build();reset()};
+$('bPause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Play':'Pause'};
+$('bReset').onclick=reset;
+$('bFS').onclick=()=>{const el=document.documentElement;if(document.fullscreenElement||document.webkitFullscreenElement){(document.exitFullscreen||document.webkitExitFullscreen).call(document)}else{(el.requestFullscreen||el.webkitRequestFullscreen).call(el)}};
+build();reset();sync();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
