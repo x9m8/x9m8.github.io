@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Long Island Data Explorer | x9m8</title>
+<style>
+:root{--bg:#0b1016;--panel:#121a24;--ink:#e6edf3;--mute:#8b98a8;--a:#5ab0ff;--b:#ffb454;--c:#8fe0a8;--d:#ff7ab6}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
+#app{display:flex;flex-direction:column;height:100%}
+header{display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--panel);border-bottom:1px solid #1f2a38;flex-wrap:wrap}
+h1{font-size:15px;margin:0 8px 0 0;font-weight:600}
+.sp{flex:1}
+button{background:#1b2634;color:var(--ink);border:1px solid #2a384b;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--a)}button.on{background:var(--a);color:#06101a;border-color:var(--a)}
+main{flex:1;overflow:auto;padding:12px}
+.row{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:4px 0 8px}
+label{display:flex;gap:5px;align-items:center;cursor:pointer}
+canvas{width:100%;height:330px;display:block;background:#0e151e;border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:13px;margin-top:10px}
+th,td{padding:4px 8px;border-bottom:1px solid #1b2634;text-align:right}th:first-child,td:first-child{text-align:left}
+th{color:var(--mute);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+tr.hl td{background:#17283a}
+.note{color:var(--mute);font-size:12px;margin:8px 0}
+.big{font-size:26px;font-weight:600}
+.card{background:var(--panel);border:1px solid #1f2a38;border-radius:8px;padding:10px 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:10px 0}
+input[type=range]{width:260px}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+<h1>Long Island Data Explorer</h1>
+<button id="tW" class="on">Minimum wage</button>
+<button id="tE">Restaurant jobs</button>
+<button id="tB">Beach water</button>
+<span class="sp"></span>
+<button id="bFS">Full screen</button>
+</header>
+<main id="out"></main>
+</div>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+// Data below is transcribed from the tables of two x9m8.com preprints (see the Sources note in each tab).
+// Table 1, Kalafatis 2026, "Regional minimum wages and restaurant employment on Long Island, New York"
+const W=[ // year, LI/Westchester, rest of state, gap, tipped LI, tipped rest, fast food LI, fast food rest
+[2014,8.00,8.00,0,null,null,8.00,8.00],[2015,8.75,8.75,0,null,null,8.75,8.75],[2016,9.00,9.00,0,null,null,9.75,9.75],
+[2017,10.00,9.70,.30,7.50,7.50,10.75,10.75],[2018,11.00,10.40,.60,7.50,7.50,11.75,11.75],[2019,12.00,11.10,.90,8.00,7.50,12.75,12.75],
+[2020,13.00,11.80,1.20,8.65,7.85,13.75,13.75],[2021,14.00,12.50,1.50,9.35,8.35,15.00,15.00],[2022,15.00,13.20,1.80,10.00,8.80,15.00,15.00],
+[2023,15.00,14.20,.80,10.00,9.45,15.00,15.00],[2024,16.00,15.00,1.00,10.65,10.00,16.00,15.00],[2025,16.50,15.50,1.00,11.00,10.35,16.50,15.50],[2026,17.00,16.00,1.00,11.35,10.70,17.00,16.00]];
+const WS=[['General: Long Island / Westchester',1,'#5ab0ff'],['General: rest of state',2,'#ffb454'],['Tipped cash wage: Long Island',4,'#8fe0a8'],['Tipped cash wage: rest of state',5,'#ff7ab6'],['Fast food: Long Island',6,'#b794f6'],['Fast food: rest of state',7,'#f2e07a']];
+// Table 2, same paper
+const E=[['All food services and drinking places (722)',48,92837,225439,9.4,-4.6,432,341,661,526],
+['Full-service restaurants (722511)',42,46395,103683,2.9,-13.0,483,368,729,572],
+['Limited-service restaurants (722513)',42,25647,69350,16.6,1.6,347,307,558,474],
+['Total private employment (all industries)',54,1094011,2540435,4.0,1.2,1085,864,1493,1244]];
+// Table 1 and abstract, Kalafatis 2026, "Enterococcus at New York State Park beaches on Long Island"
+const B=[['Great South Bay',2,312,23,7.4,1.040],['Long Island Sound',4,741,40,5.4,0.957],['Atlantic Ocean',9,2095,80,3.8,1.020],['All Long Island (pooled)',15,3148,143,4.5,1.006]];
+let tab='W',yr=2026,show=[true,true,false,false,false,false];
+const f2=v=>v==null?'—':'$'+v.toFixed(2);
+function chart(cv,series,xs,ymin,ymax,hi,fmt){
+ const d=devicePixelRatio||1,r=cv.getBoundingClientRect();cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);
+ const c=cv.getContext('2d');c.scale(d,d);const w=r.width,h=r.height,L=48,R=12,T=14,Bt=28;
+ c.clearRect(0,0,w,h);c.font='11px system-ui';c.fillStyle='#8b98a8';c.strokeStyle='#1f2a38';
+ const X=i=>L+(w-L-R)*i/(xs.length-1),Y=v=>T+(h-T-Bt)*(1-(v-ymin)/(ymax-ymin));
+ for(let k=0;k<=4;k++){const v=ymin+(ymax-ymin)*k/4,y=Y(v);c.beginPath();c.moveTo(L,y);c.lineTo(w-R,y);c.stroke();c.textAlign='right';c.fillText(fmt(v),L-6,y+4)}
+ c.textAlign='center';xs.forEach((x,i)=>{if(i%2===0||xs.length<8)c.fillText(x,X(i),h-8)});
+ if(hi>=0){c.strokeStyle='#5ab0ff66';c.beginPath();c.moveTo(X(hi),T);c.lineTo(X(hi),h-Bt);c.stroke()}
+ for(const s of series){c.strokeStyle=s.col;c.lineWidth=2.2;c.beginPath();let st=false;s.v.forEach((v,i)=>{if(v==null){st=false;return}st?c.lineTo(X(i),Y(v)):c.moveTo(X(i),Y(v));st=true});c.stroke();
+  c.fillStyle=s.col;s.v.forEach((v,i)=>{if(v!=null){c.beginPath();c.arc(X(i),Y(v),i===hi?4.5:2.2,0,7);c.fill()}})}
+ return {X,Y}
+}
+function renderW(){
+ const o=$('out');
+ let h='<div class="row">'+WS.map((s,i)=>`<label><input type="checkbox" data-i="${i}" ${show[i]?'checked':''}><span style="color:${s[2]}">&#9632;</span> ${s[0]}</label>`).join('')+'</div>';
+ h+='<canvas id="cv"></canvas><div class="row"><label>Year <input id="yr" type="range" min="2014" max="2026" step="1" value="'+yr+'"></label><b id="yl">'+yr+'</b></div><div class="grid" id="cards"></div>';
+ h+='<table><tr><th>Year</th><th>LI / Westchester</th><th>Rest of state</th><th>Gap</th><th>Tipped LI</th><th>Tipped rest</th><th>Fast food LI</th><th>Fast food rest</th></tr>'+W.map(r=>`<tr data-y="${r[0]}" class="${r[0]===yr?'hl':''}"><td>${r[0]}</td><td>${f2(r[1])}</td><td>${f2(r[2])}</td><td>${f2(r[3])}</td><td>${f2(r[4])}</td><td>${f2(r[5])}</td><td>${f2(r[6])}</td><td>${f2(r[7])}</td></tr>`).join('')+'</table>';
+ h+='<div class="note">Source: Table 1 of the x9m8.com preprint &ldquo;Regional minimum wages and restaurant employment on Long Island, New York&rdquo; (Kalafatis, 2026, not peer reviewed): minimum hourly rates in force for most of each year. Fast-food rates are the effective rates as listed in that table. A dash means the table gives no value.</div>';
+ o.innerHTML=h;
+ const draw=()=>{const ser=WS.map((s,i)=>show[i]?{col:s[2],v:W.map(r=>r[s[1]])}:null).filter(Boolean);
+  chart($('cv'),ser,W.map(r=>r[0]),6,18,yr-2014,v=>'$'+v.toFixed(0));
+  const r=W.find(x=>x[0]===yr);$('yl').textContent=yr;
+  $('cards').innerHTML=`<div class="card"><div class="note">General minimum, Long Island</div><div class="big">${f2(r[1])}</div></div><div class="card"><div class="note">Rest of state</div><div class="big">${f2(r[2])}</div></div><div class="card"><div class="note">Gap</div><div class="big">${f2(r[3])}</div><div class="note">${r[2]>0?(100*r[3]/r[2]).toFixed(1)+' pct of the upstate rate':''}</div></div>`;
+  o.querySelectorAll('tr[data-y]').forEach(t=>t.classList.toggle('hl',+t.dataset.y===yr))};
+ draw();
+ $('yr').oninput=e=>{yr=+e.target.value;draw()};
+ o.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.onchange=()=>{show[+cb.dataset.i]=cb.checked;draw()});
+ o.querySelectorAll('tr[data-y]').forEach(t=>t.onclick=()=>{yr=+t.dataset.y;$('yr').value=yr;draw()});
+ window.onresize=draw;
+}
+let mode='emp';
+function renderE(){
+ const o=$('out');
+ const sel=(k,t)=>`<button data-m="${k}" class="${mode===k?'on':''}">${t}</button>`;
+ let h='<div class="row">'+sel('emp','Employment change 2016&ndash;2025')+sel('wage','Average weekly wage 2025')+sel('lvl','Weekly wage growth 2016&ndash;2025')+'</div><canvas id="cv"></canvas>';
+ h+='<table><tr><th>Industry</th><th>Comparison counties</th><th>Employment 2016 (LI / comp.)</th><th>Change 2016&ndash;2025 (LI / comp.)</th><th>Weekly wage 2016 (LI / comp.)</th><th>Weekly wage 2025 (LI / comp.)</th></tr>'+E.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2].toLocaleString('en-US')} / ${r[3].toLocaleString('en-US')}</td><td>${r[4]>0?'+':''}${r[4].toFixed(1)} pct / ${r[5]>0?'+':''}${r[5].toFixed(1)} pct</td><td>$${r[6]} / $${r[7]}</td><td>$${r[8]} / $${r[9]}</td></tr>`).join('')+'</table>';
+ h+='<div class="note">Source: Table 2 of the same preprint (Kalafatis, 2026). Long Island means Nassau and Suffolk counties; the comparison is counties outside New York City, Long Island and Westchester as defined in that paper. The wage growth view is computed here from the table&rsquo;s 2016 and 2025 weekly wages. This tab shows descriptive figures only; the paper&rsquo;s causal estimates, intervals and caveats are in the article, and none of this proves that the wage floor caused the differences.</div>';
+ o.innerHTML=h;
+ const draw=()=>{const cv=$('cv');const d=devicePixelRatio||1,r=cv.getBoundingClientRect();cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);
+  const c=cv.getContext('2d');c.scale(d,d);const w=r.width,hh=r.height,L=50,T=14,Bt=70;c.clearRect(0,0,w,hh);c.font='11px system-ui';
+  let a,b,lo,hi,fm,t0;
+  if(mode==='emp'){a=E.map(r=>r[4]);b=E.map(r=>r[5]);lo=-15;hi=20;fm=v=>v+'%'}else if(mode==='wage'){a=E.map(r=>r[8]);b=E.map(r=>r[9]);lo=0;hi=1600;fm=v=>'$'+v}else{a=E.map(r=>100*(r[8]/r[6]-1));b=E.map(r=>100*(r[9]/r[7]-1));lo=0;hi=80;fm=v=>v+'%'}
+  const Y=v=>T+(hh-T-Bt)*(1-(v-lo)/(hi-lo));c.strokeStyle='#1f2a38';c.fillStyle='#8b98a8';
+  for(let k=0;k<=5;k++){const v=lo+(hi-lo)*k/5,y=Y(v);c.beginPath();c.moveTo(L,y);c.lineTo(w-8,y);c.stroke();c.textAlign='right';c.fillText(fm(Math.round(v)),L-6,y+4)}
+  const gw=(w-L-8)/E.length,bw=Math.min(40,gw/3);
+  E.forEach((r,i)=>{const x=L+gw*i+gw/2;[[a[i],'#5ab0ff',-bw],[b[i],'#ffb454',0]].forEach(([v,col,dx])=>{c.fillStyle=col;const y0=Y(0),y1=Y(v);c.fillRect(x+dx,Math.min(y0,y1),bw,Math.abs(y1-y0));c.fillStyle='#e6edf3';c.textAlign='center';c.fillText((mode==='wage'?'$'+Math.round(v):v.toFixed(1)+'%'),x+dx+bw/2,(v>=0?y1-4:y1+12))});
+   c.fillStyle='#8b98a8';c.textAlign='center';const words=r[0].replace(/ \(.*\)/,'').split(' ');let line='',ly=hh-Bt+16;words.forEach(wd=>{if((line+wd).length>20){c.fillText(line,x,ly);ly+=13;line=''}line+=wd+' '});c.fillText(line,x,ly)});
+  c.fillStyle='#5ab0ff';c.fillRect(w-190,6,10,10);c.fillStyle='#e6edf3';c.textAlign='left';c.fillText('Long Island',w-175,15);c.fillStyle='#ffb454';c.fillRect(w-100,6,10,10);c.fillStyle='#e6edf3';c.fillText('Comparison',w-85,15)};
+ draw();window.onresize=draw;
+ o.querySelectorAll('button[data-m]').forEach(b=>b.onclick=()=>{mode=b.dataset.m;renderE()});
+}
+let cm=1;
+function renderB(){
+ const o=$('out');
+ let h='<div class="row"><b>Share of samples at or above 104 CFU/100 mL, by waterbody</b></div><canvas id="cv" style="height:240px"></canvas>';
+ h+='<table><tr><th>Waterbody</th><th>Beach stations</th><th>Samples</th><th>Exceedances</th><th>Rate</th><th>Odds ratio per year</th></tr>'+B.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2].toLocaleString('en-US')}</td><td>${r[3]}</td><td>${r[4]}%</td><td>${r[5].toFixed(3)}</td></tr>`).join('')+'</table>';
+ h+='<h3 style="margin:16px 0 4px;font-size:14px">Rain and odds of an exceedance</h3><div class="note">The paper reports that each additional centimetre of rain in the 48 hours before sampling multiplied the odds of an exceedance by 1.24 (95% CI 1.13 to 1.37). If the effect compounds the way the model assumes, the multiplier for any amount of rain is 1.24 raised to that number of centimetres. Move the slider.</div>';
+ h+='<div class="row"><label>Rain in prior 48 h <input id="cm" type="range" min="0" max="10" step="0.5" value="'+cm+'"></label><b id="cl"></b></div><div class="grid" id="cc"></div>';
+ h+='<div class="note">Source: Table 1 and the abstract of the x9m8.com preprint on Enterococcus at the 15 New York State Park beach stations on Long Island, 2015&ndash;2025 (Kalafatis, 2026, not peer reviewed). Odds multipliers are not probabilities, and the compounding below is extrapolated from the single per-centimetre estimate; very large rainfall totals lie beyond what a linear log-odds term can be trusted to describe. The paper found no year-over-year trend overall (odds ratio 1.006 per year).</div>';
+ o.innerHTML=h;
+ const draw=()=>{const cv=$('cv');const d=devicePixelRatio||1,r=cv.getBoundingClientRect();cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);
+  const c=cv.getContext('2d');c.scale(d,d);const w=r.width,hh=r.height,L=40,T=12,Bt=40;c.font='11px system-ui';
+  const Y=v=>T+(hh-T-Bt)*(1-v/9);c.strokeStyle='#1f2a38';c.fillStyle='#8b98a8';for(let k=0;k<=3;k++){const v=k*3,y=Y(v);c.beginPath();c.moveTo(L,y);c.lineTo(w-8,y);c.stroke();c.textAlign='right';c.fillText(v+'%',L-6,y+4)}
+  const gw=(w-L-8)/B.length,bw=Math.min(60,gw*.5);B.forEach((r,i)=>{const x=L+gw*i+gw/2;c.fillStyle=i===3?'#ff7ab6':'#5ab0ff';c.fillRect(x-bw/2,Y(r[4]),bw,Y(0)-Y(r[4]));c.fillStyle='#e6edf3';c.textAlign='center';c.fillText(r[4]+'%',x,Y(r[4])-5);c.fillStyle='#8b98a8';c.fillText(r[0].replace(' (pooled)',''),x,hh-Bt+16)});
+  const m=Math.pow(1.24,cm),lo=Math.pow(1.13,cm),hi=Math.pow(1.37,cm);$('cl').textContent=cm.toFixed(1)+' cm';
+  $('cc').innerHTML=`<div class="card"><div class="note">Odds multiplier</div><div class="big">&times;${m.toFixed(2)}</div></div><div class="card"><div class="note">Using the 95% CI limits</div><div class="big">&times;${lo.toFixed(2)} to &times;${hi.toFixed(2)}</div></div>`};
+ draw();window.onresize=draw;
+ $('cm').oninput=e=>{cm=+e.target.value;draw()};
+}
+function set(t){tab=t;for(const [k,id] of [['W','tW'],['E','tE'],['B','tB']])$(id).classList.toggle('on',k===t);({W:renderW,E:renderE,B:renderB})[t]()}
+$('tW').onclick=()=>set('W');$('tE').onclick=()=>set('E');$('tB').onclick=()=>set('B');
+$('bFS').onclick=()=>{const el=document.documentElement;if(document.fullscreenElement||document.webkitFullscreenElement){(document.exitFullscreen||document.webkitExitFullscreen).call(document)}else{(el.requestFullscreen||el.webkitRequestFullscreen).call(el)}};
+set('W');
+})();
+</script>
+</body>
+</html>
