@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DNA Lab | x9m8</title>
+<style>
+:root{--bg:#090d14;--panel:#111821;--ink:#e6edf3;--mute:#8b98a8;--acc:#ff7ab6}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
+#app{display:flex;flex-direction:column;height:100%}
+header{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border-bottom:1px solid #1f2a38;flex-wrap:wrap}
+header h1{font-size:15px;margin:0 8px 0 0;font-weight:600}
+.sp{flex:1}
+button,select{background:#1b2634;color:var(--ink);border:1px solid #2a384b;border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.on{background:var(--acc);color:#2a0716;border-color:var(--acc)}
+#seqbox{padding:8px 12px;background:#0d131c;border-bottom:1px solid #1f2a38}
+textarea{width:100%;height:78px;background:#0b1118;color:#cfe;border:1px solid #2a384b;border-radius:6px;padding:8px;font:13px/1.4 ui-monospace,Consolas,monospace;resize:vertical}
+#meta{font-size:12px;color:var(--mute);margin-top:4px;display:flex;gap:14px;flex-wrap:wrap}
+#meta b{color:#fff;font-weight:500}
+main{flex:1;overflow:auto;padding:10px 12px;min-height:0}
+.mono{font-family:ui-monospace,Consolas,monospace}
+.codons{display:flex;flex-wrap:wrap;gap:3px;margin:6px 0}
+.cod{border-radius:4px;padding:2px 4px;text-align:center;font:12px/1.2 ui-monospace,Consolas,monospace;min-width:34px;color:#06101a}
+.cod i{display:block;font-style:normal;font-weight:700;font-size:13px}
+.protein{word-break:break-all;font:14px/1.5 ui-monospace,Consolas,monospace;background:#0b1118;border:1px solid #1f2a38;border-radius:6px;padding:8px;margin:6px 0}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:4px 6px;border-bottom:1px solid #1b2634;text-align:left}
+th{color:var(--mute);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+td.seq{font:12px ui-monospace,Consolas,monospace}
+.pam{color:#ff7ab6;font-weight:700}
+.warn{color:#ffb454}
+.note{color:var(--mute);font-size:12px;margin:6px 0}
+canvas{width:100%;height:340px;display:block;background:#0b1118;border-radius:8px}
+h3{margin:12px 0 4px;font-size:14px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+<h1>DNA Lab</h1>
+<button id="tT" class="on">Translate</button>
+<button id="tC">CRISPR guides</button>
+<button id="tH">Helix</button>
+<span class="sp"></span>
+<button id="bEx">Example</button>
+<button id="bRev">Reverse complement</button>
+<button id="bFS">Full screen</button>
+</header>
+<div id="seqbox">
+<textarea id="seq" spellcheck="false" placeholder="Paste DNA or RNA (A, C, G, T/U). FASTA headers and numbers are ignored."></textarea>
+<div id="meta"></div>
+<div class="note">The example is a synthetic sequence written for this tool (a back-translated peptide with a start and stop codon). It is not a record from any sequence database.</div>
+</div>
+<main id="out"></main>
+</div>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+// Standard genetic code (NCBI translation table 1); codon order T,C,A,G in each position
+const AA='FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG';
+const B='TCAG';const CODE={};
+for(let i=0;i<4;i++)for(let j=0;j<4;j++)for(let k=0;k<4;k++)CODE[B[i]+B[j]+B[k]]=AA[i*16+j*4+k];
+const NAME={A:'Ala',R:'Arg',N:'Asn',D:'Asp',C:'Cys',E:'Glu',Q:'Gln',G:'Gly',H:'His',I:'Ile',L:'Leu',K:'Lys',M:'Met',F:'Phe',P:'Pro',S:'Ser',T:'Thr',W:'Trp',Y:'Tyr',V:'Val','*':'Stop'};
+const CLS={A:'#a6e3a1',V:'#a6e3a1',L:'#a6e3a1',I:'#a6e3a1',M:'#ffd166',F:'#7ac7ff',W:'#7ac7ff',Y:'#7ac7ff',P:'#d9b8ff',G:'#d9b8ff',S:'#8fe0e8',T:'#8fe0e8',C:'#f2e07a',N:'#8fe0e8',Q:'#8fe0e8',D:'#ff8a7a',E:'#ff8a7a',K:'#ffa6d1',R:'#ffa6d1',H:'#ffa6d1','*':'#ffffff'};
+const EX=(()=>{ // made-up example ORF built from a fixed codon list so it is reproducible
+ const c=['ATG','GCT','AGC','AAA','GGT','GAA','GAG','CTG','TTT','ACC','GGC','GTG','GTT','CCG','ATT','CTG','GTG','GAA','CTG','GAT','GGT','GAT','GTG','AAC','GGC','CAC','AAA','TTT','AGC','GTG','CGC','GGC','GAA','GGC','GAG','GGC','GAT','GCG','ACC','TAT','GGC','AAA','CTG','ACC','CTG','AAA','TTT','ATT','TGC','ACC','ACC','GGC','AAA','CTG','CCG','GTG','TAA'];return c.join('')})();
+let tab='T';
+function clean(s){s=s.replace(/^>.*$/gm,'');return s.toUpperCase().replace(/U/g,'T').replace(/[^ACGT]/g,'')}
+function rc(s){const m={A:'T',T:'A',C:'G',G:'C'};return s.split('').reverse().map(x=>m[x]).join('')}
+function gc(s){if(!s.length)return 0;let n=0;for(const x of s)if(x==='G'||x==='C')n++;return n/s.length}
+function trans(s,f){let p='';for(let i=f;i+3<=s.length;i+=3)p+=CODE[s.slice(i,i+3)];return p}
+function tm(s){ // Wallace rule for short oligos (<14 nt), otherwise a basic GC-based estimate
+ let a=0,t=0,g=0,c=0;for(const x of s){if(x==='A')a++;else if(x==='T')t++;else if(x==='G')g++;else c++}
+ if(s.length<14)return 2*(a+t)+4*(g+c);return 64.9+41*(g+c-16.4)/s.length}
+function meta(s){$('meta').innerHTML=`Length <b>${s.length} nt</b> &middot; GC <b>${(gc(s)*100).toFixed(1)}%</b> &middot; A ${[...s].filter(x=>x==='A').length} &middot; C ${[...s].filter(x=>x==='C').length} &middot; G ${[...s].filter(x=>x==='G').length} &middot; T ${[...s].filter(x=>x==='T').length}`}
+function renderT(s){
+ let h='<div class="row"><b>Reading frames</b> <select id="frame"><option value="0">+1</option><option value="1">+2</option><option value="2">+3</option><option value="3">&minus;1</option><option value="4">&minus;2</option><option value="5">&minus;3</option></select></div>';
+ h+='<div id="frameout"></div><div class="note">Standard genetic code (translation table 1). Colours: green hydrophobic, blue aromatic, cyan polar, red acidic, pink basic, yellow Cys and Met start, purple Pro and Gly, white stop. The first stop is not the end of the display: every codon is shown so you can see what follows.</div>';
+ $('out').innerHTML=h;
+ const fr=$('frame');fr.onchange=()=>draw();
+ function draw(){
+  const f=+fr.value;const seq=f<3?s:rc(s);const off=f%3;
+  let cods='';const prot=trans(seq,off);
+  for(let i=off;i+3<=seq.length;i+=3){const c=seq.slice(i,i+3),a=CODE[c];cods+=`<div class="cod" style="background:${CLS[a]}" title="${NAME[a]}"><span>${c}</span><i>${a}</i></div>`}
+  const orf=[];let cur='';let started=false;for(const a of prot){if(a==='M')started=true;if(started)cur+=a;if(a==='*'&&started){orf.push(cur);cur='';started=false}}
+  $('frameout').innerHTML=`<div class="codons">${cods||'<span class="note">Need at least 3 nucleotides.</span>'}</div><h3>Protein (all codons)</h3><div class="protein">${prot||'&nbsp;'}</div><h3>Open reading frames in this frame (ATG to stop)</h3>`+(orf.length?orf.map(o=>`<div class="protein">${o} <span class="note">(${o.length-1} aa)</span></div>`).join(''):'<div class="note">None: no ATG followed by a stop codon in this frame.</div>')
+ }
+ draw();
+}
+function guides(s){
+ const out=[];
+ const scan=(seq,strand)=>{for(let i=21;i+2<seq.length;i++){ // protospacer seq[i-20..i-1], PAM seq[i..i+2]=NGG
+   if(seq[i+1]==='G'&&seq[i+2]==='G'){const g=seq.slice(i-20,i),pam=seq.slice(i,i+3);
+     const pos=strand==='+'?i-20:s.length-i; // start (1-based) in the forward sequence of the protospacer footprint
+     out.push({strand,g,pam,start:strand==='+'?(i-20)+1:(s.length-i)+1,cut:strand==='+'?i-3:s.length-i+3,gc:gc(g)})}}};
+ scan(s,'+');scan(rc(s),'-');
+ return out.sort((a,b)=>a.start-b.start);
+}
+function renderC(s){
+ const L=guides(s);
+ let h='<div class="note">Finds 20-nt protospacers followed by an NGG PAM for <i>Streptococcus pyogenes</i> Cas9 on both strands. SpCas9 cuts about 3 bp upstream of the PAM. Only a few simple flags are applied below; there is no off-target or efficiency prediction, so these are starting points for design, not validated guides.</div>';
+ if(!L.length){h+='<div class="note">No NGG sites with 20 nt of upstream sequence found. Try a longer sequence.</div>';$('out').innerHTML=h;return}
+ h+=`<div class="row"><b>${L.length} candidate sites</b></div><table><tr><th>#</th><th>Strand</th><th>Start</th><th>Guide (5&prime;&rarr;3&prime;) + PAM</th><th>GC</th><th>Flags</th></tr>`;
+ L.forEach((x,i)=>{const fl=[];if(x.gc<.4||x.gc>.7)fl.push('GC outside 40&ndash;70%');if(/TTTT/.test(x.g))fl.push('TTTT (U6 terminator)');if(/(.)\1{4,}/.test(x.g))fl.push('homopolymer run');if(x.g[0]!=='G')fl.push('5&prime; not G');
+  h+=`<tr><td>${i+1}</td><td>${x.strand}</td><td>${x.start}</td><td class="seq">${x.g}<span class="pam">${x.pam}</span></td><td>${(x.gc*100).toFixed(0)}%</td><td class="warn">${fl.join('; ')||'<span style="color:#a6e3a1">none</span>'}</td></tr>`});
+ h+='</table><div class="note">Start is the 1-based position of the guide in the forward sequence you entered. For minus-strand sites, the guide shown is the reverse complement of the forward sequence. The &ldquo;5&prime; not G&rdquo; flag reflects the common convention of a leading G for U6 promoter expression; it is a convention, not a rule.</div>';
+ $('out').innerHTML=h;
+}
+// helix canvas
+let raf=0,ph=0;
+function renderH(s){
+ $('out').innerHTML='<div class="note">A schematic double helix of the first 48 bases of your sequence. Base-pair colours: A-T pink and yellow, G-C blue and green. Real B-DNA turns once every roughly 10.5 base pairs; the picture uses that spacing.</div><canvas id="hx"></canvas>';
+ const cv=$('hx');const cx=cv.getContext('2d');
+ const seq=s.slice(0,48)||'ATGC';const col={A:'#ff7ab6',T:'#ffd166',G:'#6ec6ff',C:'#7ee0a8'};const comp={A:'T',T:'A',G:'C',C:'G'};
+ cancelAnimationFrame(raf);
+ const draw=()=>{if(tab!=='H')return;const d=devicePixelRatio||1,r=cv.getBoundingClientRect();if(cv.width!==Math.round(r.width*d)){cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d)}
+  const W=cv.width,H=cv.height;cx.clearRect(0,0,W,H);const n=seq.length;const step=W/(n+2);const mid=H/2,amp=H*.3;ph+=.015;
+  const pts=[];
+  for(let i=0;i<n;i++){const a=i*2*Math.PI/10.5+ph;const x=step*(i+1);const y1=mid+Math.sin(a)*amp,y2=mid-Math.sin(a)*amp;const z=Math.cos(a);pts.push({x,y1,y2,z,b:seq[i]})}
+  // backbones
+  for(const k of ['y1','y2']){cx.strokeStyle='#8b98a8';cx.lineWidth=3*d;cx.beginPath();pts.forEach((p,i)=>i?cx.lineTo(p.x,p[k]):cx.moveTo(p.x,p[k]));cx.stroke()}
+  // base pairs, back to front
+  const ord=[...pts].sort((a,b)=>a.z-b.z);
+  for(const p of ord){const m=(p.y1+p.y2)/2;cx.lineWidth=(4+2*p.z)*d;cx.globalAlpha=.55+.45*(p.z+1)/2;
+   cx.strokeStyle=col[p.b];cx.beginPath();cx.moveTo(p.x,p.y1);cx.lineTo(p.x,m);cx.stroke();
+   cx.strokeStyle=col[comp[p.b]];cx.beginPath();cx.moveTo(p.x,m);cx.lineTo(p.x,p.y2);cx.stroke();cx.globalAlpha=1;
+   cx.fillStyle='#e6edf3';cx.font=`${11*d}px ui-monospace,Consolas,monospace`;cx.textAlign='center';
+   if(step>14*d){cx.fillText(p.b,p.x,p.y1-8*d);cx.fillText(comp[p.b],p.x,p.y2+16*d)}}
+  raf=requestAnimationFrame(draw)};
+ draw();
+}
+function refresh(){const s=clean($('seq').value);meta(s);cancelAnimationFrame(raf);
+ if(tab==='T')renderT(s);else if(tab==='C')renderC(s);else renderH(s)}
+function setTab(t){tab=t;for(const [k,id] of [['T','tT'],['C','tC'],['H','tH']])$(id).classList.toggle('on',k===t);refresh()}
+$('tT').onclick=()=>setTab('T');$('tC').onclick=()=>setTab('C');$('tH').onclick=()=>setTab('H');
+$('seq').oninput=refresh;
+$('bEx').onclick=()=>{$('seq').value=EX;refresh()};
+$('bRev').onclick=()=>{$('seq').value=rc(clean($('seq').value));refresh()};
+$('bFS').onclick=()=>{const el=document.documentElement;if(document.fullscreenElement||document.webkitFullscreenElement){(document.exitFullscreen||document.webkitExitFullscreen).call(document)}else{(el.requestFullscreen||el.webkitRequestFullscreen).call(el)}};
+$('seq').value=EX;refresh();
+})();
+</script>
+</body>
+</html>
