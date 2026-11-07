@@ -52,7 +52,7 @@ const SYS={
   note:'Rössler designed this as the simplest flow with chaos: one spiral plus an occasional fold. Raise c to watch it go from a loop to a period-doubling cascade and chaos.'},
  thomas:{name:'Thomas cyclically symmetric',p:{b:[.208186,0,.4,.001]},x0:[.1,0,0],scale:4.2,ctr:[0,0,0],dt:.05,
   f:(s,p)=>[Math.sin(s[1])-p.b*s[0],Math.sin(s[2])-p.b*s[1],Math.sin(s[0])-p.b*s[2]],
-  note:'A friction-like parameter b sets everything. Near 0.208 it is chaotic; above about 0.32 the motion settles to a fixed point.'},
+  note:'The parameter b sets how dissipative the system is. At 0.208 the motion is chaotic; as b rises it calms into limit cycles and eventually a fixed point. At b near 0 it wanders the whole space.'},
  aizawa:{name:'Aizawa',p:{a:[.95,.5,1.2,.005],b:[.7,.2,1.2,.005],c:[.6,.2,1,.005],d:[3.5,1,6,.05],e:[.25,0,.6,.005],f:[.1,0,.3,.005]},x0:[.1,0,0],scale:1.9,ctr:[0,0,.3],dt:.01,
   f:(s,p)=>[(s[2]-p.b)*s[0]-p.d*s[1],p.d*s[0]+(s[2]-p.b)*s[1],p.c+p.a*s[2]-s[2]**3/3-(s[0]*s[0]+s[1]*s[1])*(1+p.e*s[2])+p.f*s[2]*s[0]**3],
   note:'A spherical, ball-with-a-tube attractor. The shape changes noticeably with a few of the sliders.'},
